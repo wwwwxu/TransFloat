@@ -1,0 +1,19 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="512" height="512" rx="112" fill="#0A0A0A"/>
+
+  <!--
+    Two crossing diagonal strokes — inspired by the reference.
+    Stroke 1: top-left to bottom-right (with a crossbar)
+    Stroke 2: shifted, creating the interleaved "TF" feel
+  -->
+  <g stroke="white" stroke-width="36" stroke-linecap="round" fill="none">
+    <!-- First stroke: diagonal going ↘ with a horizontal bar -->
+    <line x1="128" y1="160" x2="280" y2="352"/>
+    <line x1="100" y1="240" x2="280" y2="240"/>
+
+    <!-- Second stroke: diagonal going ↘, shifted right, with crossbar -->
+    <line x1="232" y1="160" x2="384" y2="352"/>
+    <line x1="232" y1="280" x2="412" y2="280"/>
+  </g>
+</svg>

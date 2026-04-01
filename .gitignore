@@ -1,0 +1,20 @@
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+
+# App bundle (built artifact)
+TransFloat.app/
+
+# macOS
+.DS_Store
+*.swp
+
+# Logs
+*.log
