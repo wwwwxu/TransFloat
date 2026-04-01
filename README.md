@@ -13,38 +13,45 @@ A lightweight macOS menu bar app that translates selected text and displays the 
 - **Free**: Uses Google Translate — no API key needed
 - **Lightweight**: Pure Swift, no Electron, no dependencies
 
-## Requirements
+## Install (Download)
 
-- macOS 13.0+
-- Accessibility permission (required for global hotkey and simulated copy)
+1. Go to [**Releases**](https://github.com/wwwwxu/TransFloat/releases/latest)
+2. Download **TransFloat.zip**
+3. Unzip and move `TransFloat.app` to your Applications folder
+4. **First launch**: Right-click the app → "Open" → click "Open" in the dialog (needed once for unsigned apps)
+5. Grant **Accessibility** permission when prompted (System Settings → Privacy & Security → Accessibility)
 
-## Build & Run
-
-```bash
-# Build
-bash build.sh
-
-# Run
-./TransFloat.app/Contents/MacOS/TransFloat
-
-# Or after registering with Launch Services:
-open TransFloat.app
-```
+> **If macOS says "damaged" or won't open**, run this in Terminal:
+> ```bash
+> xattr -cr /Applications/TransFloat.app
+> ```
+> Then open again normally.
 
 ## Usage
 
 1. Launch TransFloat — a 🌐 globe icon appears in the menu bar
-2. Grant Accessibility permission when prompted (System Settings → Privacy & Security → Accessibility)
-3. Select any text in any app
-4. Press **⌃⌥D** (Control + Option + D)
-5. Translation appears at the bottom of the screen
+2. Select any text in any app
+3. Press **⌃⌥D** (Control + Option + D)
+4. Translation appears at the bottom of the screen
 
 ### Menu Bar Options
 
+Click the 🌐 icon to:
 - **Toggle translation** on/off
 - **Change target language** via submenu
 - **Test translation** with a sample sentence
 - **Quit** the app
+
+## Build from Source
+
+Requires Xcode Command Line Tools and macOS 13.0+.
+
+```bash
+git clone https://github.com/wwwwxu/TransFloat.git
+cd TransFloat
+bash build.sh
+./TransFloat.app/Contents/MacOS/TransFloat
+```
 
 ## Tech Stack
 
@@ -53,3 +60,7 @@ open TransFloat.app
 - SwiftUI (floating bar view)
 - Carbon (RegisterEventHotKey for global hotkey)
 - Google Translate free API
+
+## License
+
+MIT

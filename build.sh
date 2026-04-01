@@ -55,7 +55,17 @@ cat > "$CONTENTS/Info.plist" << 'PLIST'
 </plist>
 PLIST
 
+# Ad-hoc code sign
+codesign --force --deep --sign - "$APP_DIR"
+
+# Create distributable zip (preserves signature)
+ditto -c -k --keepParent "$APP_DIR" TransFloat.zip
+
 echo "✅ Built: $APP_DIR"
+echo "📦 Distributable: TransFloat.zip ($(du -h TransFloat.zip | cut -f1))"
 echo ""
 echo "🚀 To run:  open TransFloat.app"
 echo "📋 First time: Grant Accessibility permission in System Settings → Privacy & Security → Accessibility"
+echo ""
+echo "⚠️  If recipient sees 'damaged' warning, run:"
+echo "   xattr -cr /path/to/TransFloat.app"
