@@ -9,8 +9,38 @@ class FloatingBarWindow {
     private var closeButton: NSButton?
 
     private let barWidthRatio: CGFloat = 0.75
+    private let maxBarHeight: CGFloat = 200
     private let bottomMargin: CGFloat = 40
     private let autoDismissDelay: TimeInterval = 3.0
+    private let padding: CGFloat = 32 + 30 // horizontal padding (24) + trailing extra (30) + some buffer
+
+    /// Measure actual text height using NSAttributedString
+    private func measureHeight(translation: String, original: String, width: CGFloat) -> CGFloat {
+        let textWidth = width - 24 - 24 - 30 // left pad + right pad + close button room
+
+        // Measure translation text
+        let transAttr = NSAttributedString(
+            string: translation,
+            attributes: [.font: NSFont.systemFont(ofSize: 18, weight: .semibold)]
+        )
+        let transRect = transAttr.boundingRect(
+            with: NSSize(width: textWidth, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading]
+        )
+
+        // Measure original text
+        let origAttr = NSAttributedString(
+            string: original,
+            attributes: [.font: NSFont.systemFont(ofSize: 13)]
+        )
+        let origRect = origAttr.boundingRect(
+            with: NSSize(width: textWidth, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading]
+        )
+
+        // Total: text heights + spacing(6) + top padding(16) + bottom padding(16)
+        return ceil(transRect.height + origRect.height + 6 + 16 + 16)
+    }
 
     func show(original: String, translation: String) {
         viewModel.original = original
@@ -26,16 +56,13 @@ class FloatingBarWindow {
         let screenFrame = screen.visibleFrame
         let panelWidth = screenFrame.width * barWidthRatio
 
-        let maxBarHeight: CGFloat = 400
-        if let hostingView = hostingView {
-            let fitSize = hostingView.intrinsicContentSize
-            let naturalHeight = max(fitSize.height, 80)
-            let panelHeight = min(naturalHeight, maxBarHeight)
-            let panelX = screenFrame.origin.x + (screenFrame.width - panelWidth) / 2
-            let panelY = screenFrame.origin.y + bottomMargin
+        // Measure real content height, cap at 200px
+        let contentHeight = measureHeight(translation: translation, original: original, width: panelWidth)
+        let height = min(contentHeight, maxBarHeight)
 
-            panel.setFrame(NSRect(x: panelX, y: panelY, width: panelWidth, height: panelHeight), display: true)
-        }
+        let panelX = screenFrame.origin.x + (screenFrame.width - panelWidth) / 2
+        let panelY = screenFrame.origin.y + bottomMargin
+        panel.setFrame(NSRect(x: panelX, y: panelY, width: panelWidth, height: height), display: true)
 
         // Position close button top-right
         if let closeButton = closeButton, let contentView = panel.contentView {
