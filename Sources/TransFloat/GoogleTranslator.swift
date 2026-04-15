@@ -16,18 +16,23 @@ enum TranslationError: LocalizedError {
 
 enum GoogleTranslator {
 
-    /// Translate text to Simplified Chinese using Google Translate free API.
-    /// Auto-detects source language.
+    /// Translate text using Google Translate free API (POST to avoid URL length limits).
     static func translate(_ text: String, targetLang: String = "zh-CN") async throws -> String {
-        guard let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=\(targetLang)&dt=t&q=\(encoded)")
-        else {
+        guard let url = URL(string: "https://translate.googleapis.com/translate_a/single") else {
             throw TranslationError.invalidURL
         }
 
+        // Use POST with form body to handle long text
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+
+        let params = "client=gtx&sl=auto&tl=\(targetLang)&dt=t&q=\(text.urlEncoded)"
+        request.httpBody = params.data(using: .utf8)
+
         let data: Data
         do {
-            (data, _) = try await URLSession.shared.data(from: url)
+            (data, _) = try await URLSession.shared.data(for: request)
         } catch {
             throw TranslationError.networkError(error)
         }
@@ -39,7 +44,6 @@ enum GoogleTranslator {
             throw TranslationError.parseError
         }
 
-        // Concatenate all translated sentence fragments
         var result = ""
         for sentence in sentences {
             if let parts = sentence as? [Any], let translated = parts.first as? String {
@@ -53,4 +57,19 @@ enum GoogleTranslator {
 
         return result
     }
+}
+
+private extension String {
+    var urlEncoded: String {
+        self.addingPercentEncoding(withAllowedCharacters: .urlQueryValueAllowed) ?? self
+    }
+}
+
+private extension CharacterSet {
+    /// URL query value safe characters (more restrictive than .urlQueryAllowed)
+    static let urlQueryValueAllowed: CharacterSet = {
+        var cs = CharacterSet.urlQueryAllowed
+        cs.remove(charactersIn: "&=+")
+        return cs
+    }()
 }
