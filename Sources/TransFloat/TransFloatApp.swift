@@ -102,6 +102,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyItem.isEnabled = false
         menu.addItem(hotkeyItem)
 
+        // Re-register hotkey (if it stops responding)
+        let reregItem = NSMenuItem(title: "🔄 快捷键失效？点此恢复", action: #selector(reregisterHotkey), keyEquivalent: "")
+        reregItem.target = self
+        menu.addItem(reregItem)
+
         menu.addItem(NSMenuItem.separator())
 
         // Test
@@ -138,6 +143,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let langName = supportedLanguages.first(where: { $0.code == code })?.name ?? code
         NSLog("[TransFloat] target language: \(langName) (\(code))")
+    }
+
+    @objc func reregisterHotkey() {
+        selectionMonitor?.reregister()
+        NSLog("[TransFloat] hotkey re-registered via menu")
     }
 
     @objc func testTranslation() {
