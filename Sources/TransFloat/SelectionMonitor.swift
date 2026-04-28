@@ -13,9 +13,9 @@ private func eventTapCallback(
     guard let refcon = refcon else { return Unmanaged.passUnretained(event) }
     let monitor = Unmanaged<SelectionMonitor>.fromOpaque(refcon).takeUnretainedValue()
 
-    // Tap was disabled (timeout or user input) — re-enable it
+    // Tap was disabled — re-enable immediately
     if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-        NSLog("[TransFloat] event tap disabled (type=\(type.rawValue)) — re-enabling")
+        NSLog("[TransFloat] tap disabled (type=\(type.rawValue)) — re-enabling")
         if let tap = monitor.eventTap {
             CGEvent.tapEnable(tap: tap, enable: true)
         }
@@ -33,7 +33,7 @@ private func eventTapCallback(
         && flags.contains(.maskAlternate)
         && !flags.contains(.maskCommand)
         && !flags.contains(.maskShift) {
-        NSLog("[TransFloat] ⌃⌥D detected via CGEventTap")
+        NSLog("[TransFloat] ⌃⌥D detected")
         DispatchQueue.main.async { monitor.captureSelectedText() }
     }
 
@@ -46,6 +46,11 @@ class SelectionMonitor {
     private let onTextSelected: (String) -> Void
     fileprivate var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
+    private var watchdogTimer: Timer?
+
+    // Carbon fallback
+    private var hotKeyRef: EventHotKeyRef?
+    private var handlerRef: EventHandlerRef?
 
     init(onTextSelected: @escaping (String) -> Void) {
         self.onTextSelected = onTextSelected
@@ -53,11 +58,15 @@ class SelectionMonitor {
 
     func start() {
         setupEventTap()
+        startWatchdog()
         observeSleepWake()
     }
 
     func stop() {
+        watchdogTimer?.invalidate()
+        watchdogTimer = nil
         teardownEventTap()
+        teardownCarbonHotKey()
         NSWorkspace.shared.notificationCenter.removeObserver(self)
     }
 
@@ -69,12 +78,43 @@ class SelectionMonitor {
 
     deinit { stop() }
 
+    // MARK: - Watchdog
+
+    private func startWatchdog() {
+        watchdogTimer?.invalidate()
+        watchdogTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            self?.checkTapHealth()
+        }
+    }
+
+    private func checkTapHealth() {
+        if let tap = eventTap {
+            if !CGEvent.tapIsEnabled(tap: tap) {
+                NSLog("[TransFloat] watchdog: tap disabled — re-enabling")
+                CGEvent.tapEnable(tap: tap, enable: true)
+            }
+        } else {
+            if AXIsProcessTrusted() {
+                NSLog("[TransFloat] watchdog: tap missing — recreating")
+                setupEventTap()
+            } else {
+                NSLog("[TransFloat] watchdog: Accessibility lost — opening settings")
+                openAccessibilitySettings()
+            }
+        }
+    }
+
+    private func openAccessibilitySettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
     // MARK: - CGEventTap
 
     private func setupEventTap() {
         let selfPtr = Unmanaged.passUnretained(self).toOpaque()
 
-        // Listen for keyDown + tap-disabled events
         let mask: CGEventMask =
             (1 << CGEventType.keyDown.rawValue) |
             (1 << CGEventType.tapDisabledByTimeout.rawValue) |
@@ -88,7 +128,7 @@ class SelectionMonitor {
             callback: eventTapCallback,
             userInfo: selfPtr
         ) else {
-            NSLog("[TransFloat] ⚠️ CGEventTap failed (no Accessibility?) — falling back to Carbon")
+            NSLog("[TransFloat] ⚠️ CGEventTap failed — trying Carbon fallback")
             setupCarbonHotKey()
             return
         }
@@ -99,7 +139,7 @@ class SelectionMonitor {
 
         eventTap = tap
         runLoopSource = src
-        NSLog("[TransFloat] ✅ CGEventTap registered for ⌃⌥D")
+        NSLog("[TransFloat] ✅ CGEventTap active")
     }
 
     private func teardownEventTap() {
@@ -114,9 +154,6 @@ class SelectionMonitor {
     }
 
     // MARK: - Carbon fallback
-
-    private var hotKeyRef: EventHotKeyRef?
-    private var handlerRef: EventHandlerRef?
 
     private func setupCarbonHotKey() {
         var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard),
@@ -134,10 +171,15 @@ class SelectionMonitor {
                                          GetApplicationEventTarget(), 0, &ref)
         if status == noErr {
             hotKeyRef = ref
-            NSLog("[TransFloat] ✅ Carbon hotkey registered (fallback): ⌃⌥D")
+            NSLog("[TransFloat] ✅ Carbon hotkey registered (fallback)")
         } else {
-            NSLog("[TransFloat] ❌ Carbon hotkey also failed: \(status)")
+            NSLog("[TransFloat] ❌ Carbon hotkey failed: \(status)")
         }
+    }
+
+    private func teardownCarbonHotKey() {
+        if let ref = hotKeyRef { UnregisterEventHotKey(ref); hotKeyRef = nil }
+        if let ref = handlerRef { RemoveEventHandler(ref); handlerRef = nil }
     }
 
     // MARK: - Sleep/wake
@@ -161,7 +203,6 @@ class SelectionMonitor {
         NSLog("[TransFloat] simulating ⌘C...")
         simulateCopy()
 
-        // Wait for copy (Electron apps need 0.3s+)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
             guard let self = self else { return }
 
@@ -178,7 +219,6 @@ class SelectionMonitor {
             NSLog("[TransFloat] captured: \(text.prefix(80))")
             self.onTextSelected(text)
 
-            // Restore previous clipboard
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 pasteboard.clearContents()
                 if let saved = savedString {
@@ -205,8 +245,6 @@ class SelectionMonitor {
 
         keyDown.post(tap: .cgAnnotatedSessionEventTap)
         keyUp.post(tap: .cgAnnotatedSessionEventTap)
-
-        NSLog("[TransFloat] ⌘C posted")
     }
 }
 
@@ -217,7 +255,7 @@ private func carbonHotKeyCallback(
     event: EventRef?,
     userData: UnsafeMutableRawPointer?
 ) -> OSStatus {
-    NSLog("[TransFloat] Carbon hotkey fired (fallback)!")
+    NSLog("[TransFloat] Carbon hotkey fired!")
     guard let userData = userData else { return OSStatus(eventNotHandledErr) }
     let monitor = Unmanaged<SelectionMonitor>.fromOpaque(userData).takeUnretainedValue()
     DispatchQueue.main.async { monitor.captureSelectedText() }

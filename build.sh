@@ -55,8 +55,14 @@ cat > "$CONTENTS/Info.plist" << 'PLIST'
 </plist>
 PLIST
 
-# Ad-hoc code sign
-codesign --force --deep --sign - "$APP_DIR"
+# Sign with stable self-signed cert (preserves Accessibility permission across builds)
+CERT_NAME="TransFloat Developer"
+if codesign --force --deep --sign "$CERT_NAME" "$APP_DIR" 2>/dev/null; then
+    echo "🔏 Signed with stable certificate '$CERT_NAME'"
+else
+    echo "⚠️  Stable cert not found — using ad-hoc (Accessibility permission resets each build)"
+    codesign --force --deep --sign - "$APP_DIR"
+fi
 
 # Create distributable zip (preserves signature)
 ditto -c -k --keepParent "$APP_DIR" TransFloat.zip
